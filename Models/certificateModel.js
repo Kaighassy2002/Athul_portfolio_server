@@ -1,5 +1,5 @@
 const mongoose = require('mongoose')
-const { link } = require('../Routes/router')
+
 
 const certificateSchema = new mongoose.Schema({
     image:{
