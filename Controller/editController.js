@@ -3,7 +3,7 @@ const EditorContent = require('../Models/EditorContent');
 
 exports.saveEditorContent = async (req, res) => {
   try {
-    const { title, tags, coverImageUrl, content } = req.body;
+    const { title, tags, coverImageUrl, type, content } = req.body;
 
     if (!title || title.trim() === "") {
       return res.status(400).json({ error: "Title is required" });
@@ -20,6 +20,7 @@ exports.saveEditorContent = async (req, res) => {
       title,
       tags: tagsArray,
       coverImageUrl: coverImageUrl || "",
+      type,
       content,
     });
 
@@ -63,7 +64,7 @@ exports.getEditorContentById = async (req, res) => {
 exports.updateEditorContentById = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, tags, coverImageUrl, content } = req.body;
+    const { title, tags, coverImageUrl, type, content } = req.body;
 
     if (!title || !content) {
       return res.status(400).json({ error: "Title and content are required" });
@@ -75,6 +76,7 @@ exports.updateEditorContentById = async (req, res) => {
         title,
         tags: Array.isArray(tags) ? tags : [],
         coverImageUrl: coverImageUrl || "",
+        type,
         content,
       },
       { new: true } 
@@ -88,5 +90,23 @@ exports.updateEditorContentById = async (req, res) => {
   } catch (error) {
     console.error("Error updating content:", error);
     res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+
+// get scribble 
+// Controller to get only 'scribble' type editor contents
+exports.getScribbleContents = async (req, res) => {
+  try {
+    const scribbleContents = await EditorContent.find({ type: 'scribble' }).sort({ createdAt: -1 }); // newest first
+  console.log(scribbleContents.length);
+  
+    res.status(200).json({
+      message: 'Scribble contents fetched successfully',
+      data: scribbleContents
+    });
+  } catch (error) {
+    console.error('Error fetching scribble contents:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 };

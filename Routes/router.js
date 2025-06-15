@@ -21,4 +21,6 @@ router.get("/blog/:id", editController.getEditorContentById);
 // update 
 router.put("/update/:id",editController.updateEditorContentById)
 
+router.get('/list-scribble', editController.getScribbleContents);
+
 module.exports = router

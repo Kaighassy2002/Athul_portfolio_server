@@ -13,6 +13,10 @@ const EditorContentSchema = new mongoose.Schema({
     type: String,
     default: "", 
   },
+  type: {
+    type: String,
+    default: "", 
+  },
   content: {
     type: Object,
     required: true,
