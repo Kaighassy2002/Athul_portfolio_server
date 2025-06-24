@@ -1,50 +1,58 @@
 const EditorContent = require('../Models/EditorContent');
+const ScribbleContent = require('../Models/scribbleSchema')
+const TechStack = require('../Models/techStackSchema')
 
-
-exports.saveEditorContent = async (req, res) => {
+exports.createBlogPost = async (req, res) => {
   try {
-    const { title, tags, coverImageUrl, type, content } = req.body;
-
-    if (!title || title.trim() === "") {
-      return res.status(400).json({ error: "Title is required" });
-    }
-
-    if (!content) {
-      return res.status(400).json({ error: "Content is required" });
-    }
-
-    
-    const tagsArray = Array.isArray(tags) ? tags : [];
-
-    const newContent = new EditorContent({
+    const {
       title,
-      tags: tagsArray,
-      coverImageUrl: coverImageUrl || "",
-      type,
+      slug,
       content,
+      tags,
+      tech_stack,
+      coverImageUrl,
+      author,
+      is_published
+    } = req.body;
+
+    const newBlog = new EditorContent({
+      title,
+      slug,
+      content,
+      tags,
+      tech_stack,
+      coverImageUrl,
+      author,
+      is_published,
+      createdAt: new Date(),
+      updatedAt: new Date()
     });
 
-    await newContent.save();
+    await newBlog.save();
+    res.status(200).json({ message: 'Blog post created successfully', blog: newBlog });
 
-    res.status(200).json({ message: "Content saved successfully", data: newContent });
   } catch (error) {
-    console.error("Error saving content:", error);
-    res.status(500).json({ error: "Internal Server Error" });
+    console.error('Error creating blog post:', error);
+    res.status(500).json({ message: 'Internal Server Error', error });
   }
 };
 
 
-exports.getEditorContents = async (req, res) => {
-  try {
-    const contents = await EditorContent.find().sort({ createdAt: -1 }); // newest first
 
-    res.status(200).json({ 
-      message: 'Contents fetched successfully', 
-      data: contents 
-    });
+
+
+
+// GET all blog posts
+exports.getAllBlogPosts = async (req, res) => {
+  try {
+    const blogs = await EditorContent.find()
+      .populate('tech_stack') // populate ObjectId references with data from TechStack
+      .sort({ createdAt: -1 }); // optional: latest first
+
+    res.status(200).json(blogs);
   } catch (error) {
-    console.error('Error fetching contents:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    console.error('Error fetching blogs:', error);
+    res.status(500).json({ message: 'Internal server error', error });
   }
 };
 
@@ -61,25 +69,36 @@ exports.getEditorContentById = async (req, res) => {
 };
 
 
-exports.updateEditorContentById = async (req, res) => {
+exports.updateBlogContentById = async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, tags, coverImageUrl, type, content } = req.body;
+    const {
+      title,
+      slug,
+      content,
+      tags,
+      tech_stack,
+      coverImageUrl,
+      is_published,
+    } = req.body;
 
-    if (!title || !content) {
-      return res.status(400).json({ error: "Title and content are required" });
+    if (!title || !slug || !content) {
+      return res.status(400).json({ error: "Title, slug, and content are required" });
     }
 
     const updatedContent = await EditorContent.findByIdAndUpdate(
       id,
       {
         title,
-        tags: Array.isArray(tags) ? tags : [],
-        coverImageUrl: coverImageUrl || "",
-        type,
+        slug,
         content,
+        tags: Array.isArray(tags) ? tags : [],
+        tech_stack: Array.isArray(tech_stack) ? tech_stack : [],
+        coverImageUrl: coverImageUrl || "",
+        is_published: typeof is_published === "boolean" ? is_published : false,
+        updatedAt: new Date(),
       },
-      { new: true } 
+      { new: true }
     );
 
     if (!updatedContent) {
@@ -94,19 +113,52 @@ exports.updateEditorContentById = async (req, res) => {
 };
 
 
-// get scribble 
-// Controller to get only 'scribble' type editor contents
-exports.getScribbleContents = async (req, res) => {
+
+
+
+exports.addTechStack = async (req, res) => {
   try {
-    const scribbleContents = await EditorContent.find({ type: 'scribble' }).sort({ createdAt: -1 }); // newest first
-  console.log(scribbleContents.length);
-  
-    res.status(200).json({
-      message: 'Scribble contents fetched successfully',
-      data: scribbleContents
+    const { name, type, description } = req.body;
+
+    // ✅ Validate required fields
+    if (!name || !type || !description) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    // ✅ Handle file path if image uploaded
+    const logoPath = req.file ? `/uploads/logos/${req.file.filename}` : '';
+
+    const newTech = new TechStack({
+      name,
+      type,
+      description,
+      logo_url: logoPath,
     });
+
+    await newTech.save();
+
+    res.status(201).json({
+      message: 'Tech stack item added successfully',
+      data: newTech,
+    });
+
   } catch (error) {
-    console.error('Error fetching scribble contents:', error);
-    res.status(500).json({ error: 'Internal Server Error' });
+    console.error('❌ Error in addTechStack:', error);
+    res.status(500).json({ message: 'Error saving tech stack item' });
   }
 };
+
+
+exports.getTechStack = async (req, res) => {
+  try {
+    const characters = await TechStack.find().sort({ name: 1 }); 
+    res.status(200).json(characters);
+  } catch (error) {
+    console.error('Error fetching characters:', error);
+    res.status(500).json({ message: 'Server error', error });
+  }
+};
+
+
+
+

@@ -1,30 +1,20 @@
 const mongoose = require('mongoose');
 
 const EditorContentSchema = new mongoose.Schema({
-  title: {
-    type: String,
-    required: true,
-  },
-  tags: {
-    type: [String], 
-    default: [],
-  },
-  coverImageUrl: {
-    type: String,
-    default: "", 
-  },
-  type: {
-    type: String,
-    default: "", 
-  },
-  content: {
-    type: Object,
-    required: true,
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
+ title: { type: String, required: true },
+  slug: { type: String, required: true, unique: true },
+  content: { type: Object, required: true },
+  tags: { type: [String], default: [] },
+  tech_stack: [{ type: mongoose.Schema.Types.ObjectId, ref: 'TechStack' }],
+  
+  coverImageUrl: { type: String, default: "" },
+  author: {
+      type: String,
+      default: 'Athul Suresh',
+    },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
+  is_published: { type: Boolean, default: false },
 });
 
 const EditorContent = mongoose.model('EditorContent', EditorContentSchema);

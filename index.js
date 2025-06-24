@@ -3,6 +3,7 @@ const express = require('express')
 const cors = require('cors')
 const router = require('./Routes/router')
 require('./DB/connection')
+const path = require('path');
 
 
 const portfolioServer = express();
@@ -10,7 +11,9 @@ const portfolioServer = express();
 
 portfolioServer.use(cors());
 portfolioServer.use(express.json());
+portfolioServer.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 portfolioServer.use(router);
+
 
 
 const PORT = 3000 || process.env.PORT
