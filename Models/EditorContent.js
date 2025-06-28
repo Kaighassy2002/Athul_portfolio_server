@@ -6,6 +6,12 @@ const EditorContentSchema = new mongoose.Schema({
   content: { type: Object, required: true },
   tags: { type: [String], default: [] },
   tech_stack: [{ type: mongoose.Schema.Types.ObjectId, ref: 'TechStack' }],
+   type: {
+    type: String,
+    default: "blog",
+    enum: ["blog"],
+    required: true,
+  },
   
   coverImageUrl: { type: String, default: "" },
   author: {

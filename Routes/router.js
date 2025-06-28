@@ -47,4 +47,8 @@ router.post('/add-tech', upload.single('logo'), editController.addTechStack);
 
 router.get('/tech-items',editController.getTechStack)
 
+router.patch("/publish-blog/:id", editController.toggleBlogPublish);
+
+router.patch("/publish-scribble/:id", scribbileController.toggleScribblePublish);
+
 module.exports = router

@@ -13,12 +13,12 @@ exports.createScribble = async (req, res) => {
       content,
       character,     // should be a valid ObjectId
       category,
-      author,        // optional
-      is_published   // optional
+      author,        
+      is_published
     } = req.body;
 
     // Validation (basic)
-    if (!title || !slug || !content || !category ) {
+    if (!title || !slug || !content  ) {
       return res.status(400).json({ message: 'All required fields must be provided' });
     }
 
@@ -29,7 +29,8 @@ exports.createScribble = async (req, res) => {
       character,     
       category,
       author,
-      is_published
+      is_published,
+      type: "scribble" 
     });
 
     await newScribble.save();
@@ -132,12 +133,12 @@ exports.updateScribbleById = async (req, res) => {
       content,
       character,
       category,
-      is_published
+      is_published,
+      published 
     } = req.body;
 
-    // Validate required fields
-    if (!title || !slug || !content || !category) {
-      return res.status(400).json({ error: "Title, slug, content, and category are required" });
+    if (!title || !slug || !content) {
+      return res.status(400).json({ error: "Title, slug, and content are required" });
     }
 
     const updatedScribble = await ScribbleContent.findByIdAndUpdate(
@@ -148,8 +149,13 @@ exports.updateScribbleById = async (req, res) => {
         content,
         character,
         category,
-        is_published: typeof is_published === 'boolean' ? is_published : false,
+        is_published: typeof is_published === 'boolean'
+          ? is_published
+          : typeof published === 'boolean'
+            ? published
+            : false,
         updatedAt: new Date(),
+        type: "scribble"
       },
       { new: true, runValidators: true }
     );
@@ -164,6 +170,39 @@ exports.updateScribbleById = async (req, res) => {
     });
   } catch (error) {
     console.error("Error updating scribble:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+
+exports.toggleScribblePublish = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_published } = req.body;
+
+    if (typeof is_published !== "boolean") {
+      return res.status(400).json({ error: "is_published must be a boolean" });
+    }
+
+    const updatedScribble = await ScribbleContent.findByIdAndUpdate(
+      id,
+      {
+        is_published,
+        updatedAt: new Date()
+      },
+      { new: true }
+    );
+
+    if (!updatedScribble) {
+      return res.status(404).json({ error: "Scribble not found" });
+    }
+
+    res.status(200).json({
+      message: `Scribble has been ${is_published ? "published" : "unpublished"} successfully.`,
+      data: updatedScribble
+    });
+  } catch (error) {
+    console.error("Error toggling scribble publish status:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };

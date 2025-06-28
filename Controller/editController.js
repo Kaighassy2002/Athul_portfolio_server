@@ -1,5 +1,5 @@
 const EditorContent = require('../Models/EditorContent');
-const ScribbleContent = require('../Models/scribbleSchema')
+
 const TechStack = require('../Models/techStackSchema')
 
 exports.createBlogPost = async (req, res) => {
@@ -24,6 +24,7 @@ exports.createBlogPost = async (req, res) => {
       coverImageUrl,
       author,
       is_published,
+      type: "blog",
       createdAt: new Date(),
       updatedAt: new Date()
     });
@@ -80,6 +81,7 @@ exports.updateBlogContentById = async (req, res) => {
       tech_stack,
       coverImageUrl,
       is_published,
+      published // 👈 Accept frontend field
     } = req.body;
 
     if (!title || !slug || !content) {
@@ -95,8 +97,13 @@ exports.updateBlogContentById = async (req, res) => {
         tags: Array.isArray(tags) ? tags : [],
         tech_stack: Array.isArray(tech_stack) ? tech_stack : [],
         coverImageUrl: coverImageUrl || "",
-        is_published: typeof is_published === "boolean" ? is_published : false,
+        is_published: typeof is_published === "boolean" 
+          ? is_published 
+          : typeof published === "boolean" 
+            ? published 
+            : false,
         updatedAt: new Date(),
+        type: "blog"
       },
       { new: true }
     );
@@ -111,6 +118,7 @@ exports.updateBlogContentById = async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 };
+
 
 
 
@@ -156,6 +164,39 @@ exports.getTechStack = async (req, res) => {
   } catch (error) {
     console.error('Error fetching characters:', error);
     res.status(500).json({ message: 'Server error', error });
+  }
+};
+
+
+// PATCH /publish-blog/:id
+exports.toggleBlogPublish = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { is_published } = req.body;
+
+    // ✅ Validate input
+    if (typeof is_published !== "boolean") {
+      return res.status(400).json({ error: "is_published must be a boolean" });
+    }
+
+    // ✅ Update just the is_published field
+    const updatedBlog = await EditorContent.findByIdAndUpdate(
+      id,
+      { is_published, updatedAt: new Date() },
+      { new: true }
+    );
+
+    if (!updatedBlog) {
+      return res.status(404).json({ error: "Blog not found" });
+    }
+
+    res.status(200).json({
+      message: `Blog has been ${is_published ? "published" : "unpublished"} successfully.`,
+      data: updatedBlog
+    });
+  } catch (error) {
+    console.error("Error toggling blog publish status:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 };
 
