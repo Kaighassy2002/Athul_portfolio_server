@@ -4,6 +4,8 @@ const certificateController = require('../Controller/certificate')
 const editController = require('../Controller/editController')
 const scribbileController = require('../Controller/scribbileController')
 const upload = require('../middileware/multerConfig')
+ const projectController = require('../Controller/projectController')
+
 
 //add project
 router.post('/addcertificate',certificateController.addCertificate)
@@ -50,5 +52,10 @@ router.get('/tech-items',editController.getTechStack)
 router.patch("/publish-blog/:id", editController.toggleBlogPublish);
 
 router.patch("/publish-scribble/:id", scribbileController.toggleScribblePublish);
+
+
+router.post('/addproject',projectController.createProject)
+
+router.get('/getprojects', projectController.getAllProjects);
 
 module.exports = router

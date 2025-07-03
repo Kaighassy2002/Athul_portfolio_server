@@ -140,7 +140,7 @@ exports.addTechStack = async (req, res) => {
       name,
       type,
       description,
-      logo_url: logoPath,
+      logo: logoPath,
     });
 
     await newTech.save();
@@ -157,13 +157,24 @@ exports.addTechStack = async (req, res) => {
 };
 
 
+// exports.getTechStack = async (req, res) => {
+//   try {
+//     const characters = await TechStack.find().sort({ name: 1 }); 
+//     res.status(200).json(characters);
+//   } catch (error) {
+//     console.error('Error fetching characters:', error);
+//     res.status(500).json({ message: 'Server error', error });
+//   }
+// };
+
+// 
 exports.getTechStack = async (req, res) => {
   try {
-    const characters = await TechStack.find().sort({ name: 1 }); 
-    res.status(200).json(characters);
+    const tools = await TechStack.find(); 
+    res.status(200).json(tools);
   } catch (error) {
-    console.error('Error fetching characters:', error);
-    res.status(500).json({ message: 'Server error', error });
+    console.error("Error fetching tech stack:", error);
+    res.status(500).json({ message: "Failed to retrieve tech stack" });
   }
 };
 
