@@ -98,7 +98,12 @@ exports.getCharacters = async (req, res) => {
 
 exports.getScribbleContents = async (req, res) => {
   try {
-    const scribbleContents = await ScribbleContent.find().sort({ createdAt: -1 }); // newest first
+    const filter = {};
+    if (req.query.published === "true") {
+      filter.is_published = true;
+    }
+
+    const scribbleContents = await ScribbleContent.find(filter).sort({ createdAt: -1 }); // newest first
   console.log(scribbleContents.length);
   
     res.status(200).json({
@@ -203,6 +208,19 @@ exports.toggleScribblePublish = async (req, res) => {
     });
   } catch (error) {
     console.error("Error toggling scribble publish status:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+exports.deleteScribble = async (req, res) => {
+  try {
+    const deletedScribble = await ScribbleContent.findByIdAndDelete(req.params.id);
+    if (!deletedScribble) {
+      return res.status(404).json({ error: "Scribble not found" });
+    }
+    res.status(200).json({ message: "Scribble deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting scribble:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };

@@ -14,6 +14,7 @@ const EditorContentSchema = new mongoose.Schema({
   },
   
   coverImageUrl: { type: String, default: "" },
+  excerpt: { type: String, default: "" },
   author: {
       type: String,
       default: 'Athul Suresh',
@@ -21,6 +22,8 @@ const EditorContentSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
   is_published: { type: Boolean, default: false },
+  viewCount: { type: Number, default: 0 },
+  shareCount: { type: Number, default: 0 },
 });
 
 const EditorContent = mongoose.model('EditorContent', EditorContentSchema);

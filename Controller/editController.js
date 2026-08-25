@@ -1,6 +1,15 @@
 const EditorContent = require('../Models/EditorContent');
+const Like = require('../Models/Like');
+const Comment = require('../Models/Comment');
 
 const TechStack = require('../Models/techStackSchema')
+const { summarizeBlogs } = require('./engagementController')
+
+const generateSlug = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 
 exports.createBlogPost = async (req, res) => {
   try {
@@ -11,19 +20,21 @@ exports.createBlogPost = async (req, res) => {
       tags,
       tech_stack,
       coverImageUrl,
+      excerpt,
       author,
       is_published
     } = req.body;
 
     const newBlog = new EditorContent({
       title,
-      slug,
+      slug: slug || generateSlug(title),
       content,
       tags,
       tech_stack,
       coverImageUrl,
+      excerpt,
       author,
-      is_published,
+      is_published: Boolean(is_published),
       type: "blog",
       createdAt: new Date(),
       updatedAt: new Date()
@@ -46,11 +57,16 @@ exports.createBlogPost = async (req, res) => {
 // GET all blog posts
 exports.getAllBlogPosts = async (req, res) => {
   try {
-    const blogs = await EditorContent.find()
-      .populate('tech_stack') // populate ObjectId references with data from TechStack
-      .sort({ createdAt: -1 }); // optional: latest first
+    const filter = {};
+    if (req.query.published === "true") {
+      filter.is_published = true;
+    }
 
-    res.status(200).json(blogs);
+    const blogs = await EditorContent.find(filter)
+      .populate('tech_stack')
+      .sort({ createdAt: -1 });
+
+    res.status(200).json(await summarizeBlogs(blogs));
   } catch (error) {
     console.error('Error fetching blogs:', error);
     res.status(500).json({ message: 'Internal server error', error });
@@ -80,6 +96,7 @@ exports.updateBlogContentById = async (req, res) => {
       tags,
       tech_stack,
       coverImageUrl,
+      excerpt,
       is_published,
       published // 👈 Accept frontend field
     } = req.body;
@@ -97,6 +114,7 @@ exports.updateBlogContentById = async (req, res) => {
         tags: Array.isArray(tags) ? tags : [],
         tech_stack: Array.isArray(tech_stack) ? tech_stack : [],
         coverImageUrl: coverImageUrl || "",
+        excerpt: excerpt || "",
         is_published: typeof is_published === "boolean" 
           ? is_published 
           : typeof published === "boolean" 
@@ -207,6 +225,23 @@ exports.toggleBlogPublish = async (req, res) => {
     });
   } catch (error) {
     console.error("Error toggling blog publish status:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+exports.deleteBlogPost = async (req, res) => {
+  try {
+    const deletedBlog = await EditorContent.findByIdAndDelete(req.params.id);
+    if (!deletedBlog) {
+      return res.status(404).json({ error: "Blog not found" });
+    }
+    await Promise.all([
+      Like.deleteMany({ postId: deletedBlog._id }),
+      Comment.deleteMany({ postId: deletedBlog._id }),
+    ]);
+    res.status(200).json({ message: "Blog deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting blog:", error);
     res.status(500).json({ error: "Internal Server Error" });
   }
 };

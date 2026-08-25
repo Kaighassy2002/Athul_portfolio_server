@@ -12,15 +12,17 @@ exports.createProject = async (req, res) => {
     const techStackIds = [];
 
     for (const techName of tech_stack) {
-      const existing = await TechStack.findOne({
+      let tech = await TechStack.findOne({
         name: { $regex: new RegExp(`^${techName}$`, 'i') }
       });
 
-      if (!existing) {
-        return res.status(400).json({ error: `Tech stack "${techName}" not found.` });
+      // If tech stack not found, create it
+      if (!tech) {
+        tech = new TechStack({ name: techName });
+        await tech.save();
       }
 
-      techStackIds.push(existing._id);
+      techStackIds.push(tech._id);
     }
 
     const newProject = new Project({
