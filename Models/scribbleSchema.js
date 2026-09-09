@@ -1,22 +1,26 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const ScribbleContentSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  slug: { type: String, required: true, unique: true },
-  content: { type: Object, required: true },
-  type: {
-    type: String,
-    default: "scribble",
-    enum: ["scribble"],
-    required: true,
+const ScribbleContentSchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true, trim: true, maxlength: 180 },
+    slug: { type: String, required: true, unique: true, trim: true, maxlength: 180 },
+    content: { type: mongoose.Schema.Types.Mixed, required: true },
+    type: {
+      type: String,
+      default: "scribble",
+      enum: ["scribble"],
+      required: true,
+    },
+    character: { type: mongoose.Schema.Types.ObjectId, ref: "characterSchema" },
+    category: { type: String, default: "", maxlength: 80 },
+    author: { type: String, default: "Athul Suresh", maxlength: 80 },
+    coverImageUrl: { type: String, default: "", maxlength: 2000 },
+    excerpt: { type: String, default: "", maxlength: 500 },
+    is_published: { type: Boolean, default: false, index: true },
   },
-  character: { type: mongoose.Schema.Types.ObjectId, ref: 'Character' },
-  category: { type: String}, 
-  author: { type: String, default: 'Athul Suresh' },
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now },
-  is_published: { type: Boolean, default: false }
-});
+  { timestamps: true }
+);
 
-const ScribbleContent = mongoose.model('ScribbleContent', ScribbleContentSchema);
-module.exports = ScribbleContent
+ScribbleContentSchema.index({ is_published: 1, createdAt: -1 });
+
+module.exports = mongoose.model("ScribbleContent", ScribbleContentSchema);

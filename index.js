@@ -1,28 +1,98 @@
-require('dotenv').config()
-const express = require('express')
-const cors = require('cors')
-const router = require('./Routes/router')
-require('./DB/connection')
-const path = require('path');
+require("./config/env");
+const express = require("express");
+const cors = require("cors");
+const helmet = require("helmet");
+const cookieParser = require("cookie-parser");
+const path = require("path");
+const router = require("./Routes/router");
+const { connectDb } = require("./DB/connection");
+const { config, isAllowedOrigin } = require("./config/env");
+const { csrfMutating } = require("./middleware/auth");
+const { apiLimiter } = require("./middleware/rateLimit");
+const { notFound, errorHandler } = require("./middleware/error");
 
+const app = express();
 
-const portfolioServer = express();
+app.set("trust proxy", 1);
+app.disable("x-powered-by");
 
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 
-portfolioServer.use(cors());
-portfolioServer.use(express.json());
-portfolioServer.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-portfolioServer.use(router);
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (!origin) return callback(null, false);
+      if (isAllowedOrigin(origin)) return callback(null, true);
+      return callback(null, false);
+    },
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  })
+);
 
+app.use(cookieParser());
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: false, limit: "200kb" }));
+app.use(csrfMutating);
+app.use(apiLimiter);
 
+app.get("/health", (_req, res) => {
+  res.status(200).json({
+    success: true,
+    status: "ok",
+  });
+});
 
-const PORT = process.env.PORT || 3000
+app.get("/sitemap.xml", require("./Controller/sitemapController").sitemap);
 
-portfolioServer.listen(PORT,()=>{
-    console.log(`prtfolio Server start at port :${PORT}`);
-})
+app.use(
+  "/uploads/logos",
+  express.static(path.join(__dirname, "uploads", "logos"), {
+    fallthrough: false,
+    index: false,
+    maxAge: "7d",
+  })
+);
 
-portfolioServer.get('/',(req,res)=>{
-    res.status(200).send(`<h1 style="color:red">portfolio Server start and waiting for client Request!!!</h1>`)
-})
+app.use(router);
+app.use(notFound);
+app.use(errorHandler);
 
+let server;
+
+async function start() {
+  await connectDb();
+  server = app.listen(config.PORT, () => {
+    console.log(`portfolio server listening on ${config.PORT}`);
+  });
+}
+
+async function shutdown(signal) {
+  console.log(`shutting down (${signal})`);
+  if (server) {
+    await new Promise((resolve) => server.close(resolve));
+  }
+  try {
+    const { disconnectDb } = require("./DB/connection");
+    await disconnectDb();
+  } catch {
+    /* ignore */
+  }
+  process.exit(0);
+}
+
+if (require.main === module) {
+  start().catch((error) => {
+    console.error("startup failed");
+    process.exit(1);
+  });
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+}
+
+module.exports = { app, start };

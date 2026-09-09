@@ -21,9 +21,9 @@ const CommentSchema = new mongoose.Schema(
       index: true,
     },
     body: { type: String, required: true, trim: true, maxlength: 2000 },
-    userName: { type: String, default: "" },
-    userAvatar: { type: String, default: "" },
-    approved: { type: Boolean, default: true },
+    userName: { type: String, default: "", maxlength: 80 },
+    userAvatar: { type: String, default: "", maxlength: 500 },
+    approved: { type: Boolean, default: false, index: true },
   },
   { timestamps: true }
 );

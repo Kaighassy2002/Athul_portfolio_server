@@ -1,28 +1,10 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const techStackSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  type: {
-    type: String,
-    
-    trim: true
-  },
-  logo: {
-    type: String,
-   
-    trim: true,
-    // Example: '/uploads/logos/logo123.png'
-  },
-  description: {
-    type: String,
-    
-    trim: true
-  }
+  name: { type: String, required: true, trim: true, maxlength: 80 },
+  type: { type: String, trim: true, maxlength: 80 },
+  logo: { type: String, trim: true, maxlength: 2000 },
+  description: { type: String, trim: true, maxlength: 500 },
 });
 
-const TechStack = mongoose.model('TechStack', techStackSchema);
-module.exports = TechStack;
+module.exports = mongoose.model("TechStack", techStackSchema);

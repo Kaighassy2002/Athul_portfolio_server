@@ -2,10 +2,10 @@ const mongoose = require("mongoose");
 const EditorContent = require("../Models/EditorContent");
 const Like = require("../Models/Like");
 const Comment = require("../Models/Comment");
-
-function isId(value) {
-  return mongoose.Types.ObjectId.isValid(value);
-}
+const CounterReceipt = require("../Models/CounterReceipt");
+const { fail } = require("../utils/httpError");
+const { isId } = require("../utils/validate");
+const { hashIp } = require("../utils/crypto");
 
 function publicCommenter(comment, user) {
   return {
@@ -66,19 +66,27 @@ async function assertPost(id) {
   return post;
 }
 
-exports.getEngagement = async (req, res) => {
+async function claimCounter(req, postId, kind) {
+  const ip = hashIp(req.ip || req.headers["x-forwarded-for"] || "");
+  const key = `${kind}:${postId}:${ip}`;
+  try {
+    await CounterReceipt.create({ key });
+    return true;
+  } catch (error) {
+    if (error?.code === 11000) return false;
+    throw error;
+  }
+}
+
+exports.getEngagement = async (req, res, next) => {
   try {
     const post = await assertPost(req.params.id);
-    if (!post) {
-      return res.status(404).json({ message: "Field note not found." });
-    }
+    if (!post) throw fail(404, "Field note not found.");
 
     const currentUserId = req.user?._id;
     const [likeCount, liked, comments, postDoc] = await Promise.all([
       Like.countDocuments({ postId: post._id }),
-      currentUserId
-        ? Like.exists({ postId: post._id, userId: currentUserId })
-        : false,
+      currentUserId ? Like.exists({ postId: post._id, userId: currentUserId }) : false,
       Comment.find({ postId: post._id })
         .populate("userId", "name avatar")
         .sort({ createdAt: 1 }),
@@ -91,6 +99,7 @@ exports.getEngagement = async (req, res) => {
     const approvedCount = comments.filter(isApproved).length;
 
     res.status(200).json({
+      success: true,
       likeCount,
       liked: Boolean(liked),
       commentCount: approvedCount,
@@ -99,21 +108,20 @@ exports.getEngagement = async (req, res) => {
       comments: nestComments(visible, currentUserId),
     });
   } catch (error) {
-    console.error("getEngagement", error);
-    res.status(500).json({ message: "Could not load notes on this plate." });
+    next(error);
   }
 };
 
-exports.toggleLike = async (req, res) => {
+exports.toggleLike = async (req, res, next) => {
   try {
     const post = await assertPost(req.params.id);
-    if (!post) {
-      return res.status(404).json({ message: "Field note not found." });
+    if (!post) throw fail(404, "Field note not found.");
+    if (!req.user.emailVerified) {
+      throw fail(403, "Please verify your email first.", "EMAIL_UNVERIFIED");
     }
 
     const filter = { postId: post._id, userId: req.user._id };
     const existing = await Like.findOne(filter);
-
     if (existing) {
       await existing.deleteOne();
     } else {
@@ -126,39 +134,32 @@ exports.toggleLike = async (req, res) => {
 
     const likeCount = await Like.countDocuments({ postId: post._id });
     res.status(200).json({
+      success: true,
       liked: !existing,
       likeCount,
     });
   } catch (error) {
-    console.error("toggleLike", error);
-    res.status(500).json({ message: "Could not update the like." });
+    next(error);
   }
 };
 
-exports.addComment = async (req, res) => {
+exports.addComment = async (req, res, next) => {
   try {
     const post = await assertPost(req.params.id);
-    if (!post) {
-      return res.status(404).json({ message: "Field note not found." });
+    if (!post) throw fail(404, "Field note not found.");
+    if (!req.user.emailVerified) {
+      throw fail(403, "Please verify your email first.", "EMAIL_UNVERIFIED");
     }
 
     const body = String(req.body?.body || "").trim();
-    if (body.length < 1) {
-      return res.status(400).json({ message: "Write a note before sending." });
-    }
-    if (body.length > 2000) {
-      return res.status(400).json({ message: "That note is a little too long." });
-    }
+    if (body.length < 1) throw fail(400, "Write a note before sending.");
+    if (body.length > 2000) throw fail(400, "That note is a little too long.");
 
     let parentId = req.body?.parentId || null;
     if (parentId) {
-      if (!isId(parentId)) {
-        return res.status(400).json({ message: "That thread could not be found." });
-      }
+      if (!isId(parentId)) throw fail(400, "That thread could not be found.");
       const parent = await Comment.findOne({ _id: parentId, postId: post._id });
-      if (!parent) {
-        return res.status(400).json({ message: "That thread could not be found." });
-      }
+      if (!parent) throw fail(400, "That thread could not be found.");
       if (parent.parentId) parentId = parent.parentId;
     }
 
@@ -174,42 +175,39 @@ exports.addComment = async (req, res) => {
 
     const populated = await created.populate("userId", "name avatar");
     res.status(201).json({
+      success: true,
       comment: shapeComment(populated, req.user._id),
     });
   } catch (error) {
-    console.error("addComment", error);
-    res.status(500).json({ message: "Could not file that note." });
+    next(error);
   }
 };
 
-exports.deleteComment = async (req, res) => {
+exports.deleteComment = async (req, res, next) => {
   try {
-    if (!isId(req.params.id)) {
-      return res.status(404).json({ message: "Comment not found." });
-    }
-
+    if (!isId(req.params.id)) throw fail(404, "Comment not found.");
     const comment = await Comment.findById(req.params.id);
-    if (!comment) {
-      return res.status(404).json({ message: "Comment not found." });
-    }
+    if (!comment) throw fail(404, "Comment not found.");
     if (String(comment.userId) !== String(req.user._id)) {
-      return res.status(403).json({ message: "You can only remove your own notes." });
+      throw fail(403, "You can only remove your own notes.");
     }
-
     await Comment.deleteMany({
       $or: [{ _id: comment._id }, { parentId: comment._id }],
     });
-
-    res.status(200).json({ message: "Note removed.", id: String(comment._id) });
+    res.status(200).json({ success: true, message: "Note removed.", id: String(comment._id) });
   } catch (error) {
-    console.error("deleteComment", error);
-    res.status(500).json({ message: "Could not remove that note." });
+    next(error);
   }
 };
 
-async function incrementCounter(id, field) {
+async function incrementCounter(req, id, field, kind) {
   const post = await assertPost(id);
   if (!post) return null;
+  const claimed = await claimCounter(req, String(post._id), kind);
+  if (!claimed) {
+    const current = await EditorContent.findById(post._id).select("viewCount shareCount");
+    return current;
+  }
   return EditorContent.findByIdAndUpdate(
     post._id,
     { $inc: { [field]: 1 } },
@@ -217,33 +215,27 @@ async function incrementCounter(id, field) {
   );
 }
 
-exports.recordView = async (req, res) => {
+exports.recordView = async (req, res, next) => {
   try {
-    const post = await incrementCounter(req.params.id, "viewCount");
-    if (!post) {
-      return res.status(404).json({ message: "Field note not found." });
-    }
-    res.status(200).json({ viewCount: post.viewCount || 0 });
+    const post = await incrementCounter(req, req.params.id, "viewCount", "view");
+    if (!post) throw fail(404, "Field note not found.");
+    res.status(200).json({ success: true, viewCount: post.viewCount || 0 });
   } catch (error) {
-    console.error("recordView", error);
-    res.status(500).json({ message: "Could not record the view." });
+    next(error);
   }
 };
 
-exports.recordShare = async (req, res) => {
+exports.recordShare = async (req, res, next) => {
   try {
-    const post = await incrementCounter(req.params.id, "shareCount");
-    if (!post) {
-      return res.status(404).json({ message: "Field note not found." });
-    }
-    res.status(200).json({ shareCount: post.shareCount || 0 });
+    const post = await incrementCounter(req, req.params.id, "shareCount", "share");
+    if (!post) throw fail(404, "Field note not found.");
+    res.status(200).json({ success: true, shareCount: post.shareCount || 0 });
   } catch (error) {
-    console.error("recordShare", error);
-    res.status(500).json({ message: "Could not record the share." });
+    next(error);
   }
 };
 
-exports.summarizeBlogs = async function summarizeBlogs(blogs) {
+exports.summarizeBlogs = async function summarizeBlogs(blogs, { includePending = false } = {}) {
   const ids = blogs.map((blog) => blog._id).filter(Boolean);
   if (!ids.length) return [];
 
@@ -257,7 +249,7 @@ exports.summarizeBlogs = async function summarizeBlogs(blogs) {
       {
         $group: {
           _id: "$postId",
-          count: { $sum: 1 },
+          count: { $sum: { $cond: [{ $ne: ["$approved", false] }, 1, 0] } },
           pending: {
             $sum: { $cond: [{ $eq: ["$approved", false] }, 1, 0] },
           },
@@ -279,7 +271,7 @@ exports.summarizeBlogs = async function summarizeBlogs(blogs) {
       shareCount: plain.shareCount || 0,
       likeCount: likes[key] || 0,
       commentCount: comment.count || 0,
-      pendingCommentCount: comment.pending || 0,
+      ...(includePending ? { pendingCommentCount: comment.pending || 0 } : {}),
     };
   });
 };
@@ -301,70 +293,61 @@ function shapeAdminComment(comment) {
     user: {
       id: user ? String(user._id) : "",
       name: user?.name || comment.userName || "Reader",
-      email: user?.email || "",
       avatar: user?.avatar || comment.userAvatar || "",
     },
   };
 }
 
-exports.listComments = async (_req, res) => {
+exports.listComments = async (_req, res, next) => {
   try {
     const comments = await Comment.find()
-      .populate("postId", "title slug is_published")
-      .populate("userId", "name email avatar")
-      .sort({ createdAt: -1 });
+      .populate({ path: "postId", select: "title slug is_published", strictPopulate: false })
+      .populate({ path: "userId", select: "name avatar", strictPopulate: false })
+      .sort({ createdAt: -1 })
+      .limit(500)
+      .lean();
 
     res.status(200).json({
+      success: true,
       comments: comments.map(shapeAdminComment),
     });
   } catch (error) {
-    console.error("listComments", error);
-    res.status(500).json({ message: "Could not load comments." });
+    next(error);
   }
 };
 
-exports.approveComment = async (req, res) => {
+exports.approveComment = async (req, res, next) => {
   try {
-    if (!isId(req.params.id)) {
-      return res.status(404).json({ message: "Comment not found." });
-    }
+    if (!isId(req.params.id)) throw fail(404, "Comment not found.");
     const comment = await Comment.findByIdAndUpdate(
       req.params.id,
       { approved: true },
       { new: true }
     )
       .populate("postId", "title slug is_published")
-      .populate("userId", "name email avatar");
+      .populate("userId", "name avatar");
 
-    if (!comment) {
-      return res.status(404).json({ message: "Comment not found." });
-    }
-
+    if (!comment) throw fail(404, "Comment not found.");
     res.status(200).json({
+      success: true,
       message: "Comment approved.",
       comment: shapeAdminComment(comment),
     });
   } catch (error) {
-    console.error("approveComment", error);
-    res.status(500).json({ message: "Could not approve that comment." });
+    next(error);
   }
 };
 
-exports.adminDeleteComment = async (req, res) => {
+exports.adminDeleteComment = async (req, res, next) => {
   try {
-    if (!isId(req.params.id)) {
-      return res.status(404).json({ message: "Comment not found." });
-    }
+    if (!isId(req.params.id)) throw fail(404, "Comment not found.");
     const comment = await Comment.findById(req.params.id);
-    if (!comment) {
-      return res.status(404).json({ message: "Comment not found." });
-    }
+    if (!comment) throw fail(404, "Comment not found.");
     await Comment.deleteMany({
       $or: [{ _id: comment._id }, { parentId: comment._id }],
     });
-    res.status(200).json({ message: "Comment deleted.", id: String(comment._id) });
+    res.status(200).json({ success: true, message: "Comment deleted.", id: String(comment._id) });
   } catch (error) {
-    console.error("adminDeleteComment", error);
-    res.status(500).json({ message: "Could not delete that comment." });
+    next(error);
   }
 };
